@@ -11,20 +11,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:reward_token_app/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
+  testWidgets('Bottom navigation switches tabs', (WidgetTester tester) async {
     await tester.pumpWidget(const MyApp());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // Bottom navigation items exist.
+    expect(find.text('Home'), findsWidgets);
+    expect(find.text('QR Scan'), findsWidgets);
+    expect(find.text('Customer Registration'), findsWidgets);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    // Starts on Home tab.
+    expect(find.widgetWithText(AppBar, 'Home'), findsOneWidget);
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Switch to QR Scan.
+    await tester.tap(find.text('QR Scan'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, 'QR Scan'), findsOneWidget);
+
+    // Switch to Customer Registration.
+    await tester.tap(find.text('Customer Registration'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, 'Customer Registration'), findsOneWidget);
+    expect(find.text('First Name'), findsOneWidget);
+    expect(find.text('Last Name'), findsOneWidget);
+    expect(find.text('Email'), findsOneWidget);
+    expect(find.text('Number'), findsOneWidget);
   });
 }
