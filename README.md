@@ -5,6 +5,7 @@ Reward Token is a Flutter + Firebase app for registering customers, issuing QR c
 ## Current Features
 
 - Employee login with **username or email + 4-digit PIN** (Firebase Auth).
+	- Remembers the last signed-in email so subsequent launches only require the 4-digit PIN (local persistence via Hive).
 - Role-aware navigation:
 	- All users: **Home**, **QR Scan**, **Customer Registration**
 	- Admin users: plus **Employee Registration** and **Admin Registration**
@@ -49,3 +50,4 @@ Reward Token is a Flutter + Firebase app for registering customers, issuing QR c
 - Firebase Authentication
 - Cloud Firestore
 - `mobile_scanner`, `image_picker`, `qr_flutter`, `printing`, `pdf`
+ - `hive_flutter` (local key-value persistence for remembering last-signed-in email)
