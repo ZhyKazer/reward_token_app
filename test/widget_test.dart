@@ -12,12 +12,13 @@ import 'package:reward_token_app/main.dart';
 
 void main() {
   testWidgets('Bottom navigation switches tabs', (WidgetTester tester) async {
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(const MyApp(requireLogin: false));
 
     // Bottom navigation items exist.
     expect(find.text('Home'), findsWidgets);
     expect(find.text('QR Scan'), findsWidgets);
     expect(find.text('Customer Registration'), findsWidgets);
+    expect(find.text('Employee Registration'), findsWidgets);
 
     // Starts on Home tab.
     expect(find.widgetWithText(AppBar, 'Home'), findsOneWidget);
@@ -35,5 +36,16 @@ void main() {
     expect(find.text('Last Name'), findsOneWidget);
     expect(find.text('Email'), findsOneWidget);
     expect(find.text('Number'), findsOneWidget);
+
+    // Switch to Employee Registration.
+    await tester.tap(find.text('Employee Registration'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, 'Employee Registration'), findsOneWidget);
+    expect(find.text('First Name'), findsOneWidget);
+    expect(find.text('Last Name'), findsOneWidget);
+    expect(find.text('Username'), findsOneWidget);
+    expect(find.text('Email'), findsOneWidget);
+    expect(find.text('Site (place employed)'), findsOneWidget);
+    expect(find.text('Role'), findsOneWidget);
   });
 }

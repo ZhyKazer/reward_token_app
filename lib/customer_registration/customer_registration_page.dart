@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:reward_token_app/audit/audit_log_service.dart';
 import 'package:reward_token_app/state/customer_store.dart';
 import 'package:reward_token_app/qr/customer_qr_card_page.dart';
 import 'package:uuid/uuid.dart';
@@ -12,9 +13,7 @@ class CustomerRegistrationPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Customer Registration'),
-      ),
+      appBar: AppBar(title: const Text('Customer Registration')),
       body: const CustomerRegistrationForm(),
     );
   }
@@ -24,7 +23,8 @@ class CustomerRegistrationForm extends StatefulWidget {
   const CustomerRegistrationForm({super.key});
 
   @override
-  State<CustomerRegistrationForm> createState() => _CustomerRegistrationFormState();
+  State<CustomerRegistrationForm> createState() =>
+      _CustomerRegistrationFormState();
 }
 
 class _CustomerRegistrationFormState extends State<CustomerRegistrationForm> {
@@ -79,10 +79,11 @@ class _CustomerRegistrationFormState extends State<CustomerRegistrationForm> {
 
     setState(() => _submitting = true);
     try {
-      // Placeholder: replace with your API/database call.
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-
       if (!mounted) return;
+
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
+      final store = CustomerStoreScope.of(context);
 
       final firstName = _firstNameController.text.trim();
       final lastName = _lastNameController.text.trim();
@@ -99,8 +100,18 @@ class _CustomerRegistrationFormState extends State<CustomerRegistrationForm> {
         points: 0,
       );
 
-      CustomerStoreScope.of(context).addCustomer(customer);
-      ScaffoldMessenger.of(context).showSnackBar(
+      await store.addCustomerAndPersist(customer);
+      final actor = await AuditLogService.currentActor();
+      await AuditLogService.logRecord(
+        type: 'customer_created',
+        title: 'New customer registered',
+        actor: actor,
+        customerId: customer.uuid,
+        customerName: customer.fullName,
+      );
+      if (!mounted) return;
+
+      messenger.showSnackBar(
         SnackBar(content: Text('Registered ${customer.fullName}')),
       );
 
@@ -110,11 +121,16 @@ class _CustomerRegistrationFormState extends State<CustomerRegistrationForm> {
       _emailController.clear();
       _numberController.clear();
 
-      await Navigator.of(context).push(
+      await navigator.push(
         MaterialPageRoute<void>(
           builder: (_) => CustomerQrCardPage(customer: customer),
         ),
       );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to save to Firebase: $e')));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

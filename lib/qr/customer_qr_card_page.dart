@@ -28,6 +28,29 @@ class _CustomerQrCardPageState extends State<CustomerQrCardPage> {
   final GlobalKey _cardKey = GlobalKey();
   bool _saving = false;
 
+  String _safeFileComponent(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return 'customer';
+    return trimmed.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
+  }
+
+  Future<Directory?> _getDownloadsDirectory() async {
+    // Desktop platforms support this out of the box.
+    if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+      return getDownloadsDirectory();
+    }
+
+    // Android: try the public Downloads folder path (may not be writable on
+    // newer Android versions due to scoped storage).
+    if (Platform.isAndroid) {
+      final downloads = Directory('/storage/emulated/0/Download');
+      if (await downloads.exists()) return downloads;
+    }
+
+    // iOS and other platforms: no public Downloads. Use app documents.
+    return getApplicationDocumentsDirectory();
+  }
+
   Future<Uint8List> _captureCardPng() async {
     final pixelRatio = View.of(context).devicePixelRatio;
     await WidgetsBinding.instance.endOfFrame;
@@ -48,15 +71,19 @@ class _CustomerQrCardPageState extends State<CustomerQrCardPage> {
 
       if (!mounted) return;
 
-      Directory? directory;
-      if (Platform.isMacOS) {
-        directory = await getDownloadsDirectory();
-      } else {
-        directory = await getApplicationDocumentsDirectory();
-      }
+      final downloadsDir = await _getDownloadsDirectory();
+      if (downloadsDir != null) {
+        final folderName = _safeFileComponent(widget.companyName);
+        final targetDir = Directory('${downloadsDir.path}/$folderName');
+        await targetDir.create(recursive: true);
 
-      if (directory != null) {
-        final file = File('${directory.path}/qr_card.png');
+        final customerName = _safeFileComponent(widget.customer.fullName);
+        final shortUuid = widget.customer.uuid.length >= 8
+            ? widget.customer.uuid.substring(0, 8)
+            : widget.customer.uuid;
+        final filename = 'qr_${customerName}_$shortUuid.png';
+
+        final file = File('${targetDir.path}/$filename');
         await file.writeAsBytes(bytes);
 
         if (!mounted) return;
