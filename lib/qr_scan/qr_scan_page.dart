@@ -514,94 +514,51 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
   @override
   void dispose() {
     _amountController.dispose();
+    _productController.dispose();
     super.dispose();
   }
-      _productController.dispose();
+
+  Future<void> _continueStep() async {
+    if (_stepIndex == 0) {
+      if (_mode == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please choose an action first.')),
+        );
+        return;
+      }
+      setState(() => _stepIndex = 1);
+      return;
+    }
+
+    await _submitAction();
+  }
+
+  void _cancelStep() {
+    if (_stepIndex == 0) {
+      Navigator.of(
+        context,
+      ).pop(const _ScanSheetResult(action: _ScanSheetAction.scanAgain));
+      return;
+    }
+    setState(() => _stepIndex = 0);
+  }
 
   Future<bool> _confirmAddPoints({
-
-    Future<bool> _confirmUsePoints({
-      required int pointsToUse,
-      required String customerName,
-      required String employeeName,
-      required String productName,
-    }) async {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text('Confirm points usage'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Customer: $customerName'),
-                const SizedBox(height: 6),
-                Text('Employee: $employeeName'),
-                const SizedBox(height: 6),
-                Text('Product: $productName'),
-                const SizedBox(height: 6),
-                Text('Points to use: $pointsToUse'),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Confirm'),
-              ),
-            ],
-          );
-        },
-      );
-
-      return confirmed ?? false;
-    }
-
-    Future<void> _continueStep() async {
-      if (_stepIndex == 0) {
-        if (_mode == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please choose an action first.')),
-          );
-          return;
-        }
-        setState(() => _stepIndex = 1);
-        return;
-      }
-
-      await _submitAction();
-    }
-
-    void _cancelStep() {
-      if (_stepIndex == 0) {
-        Navigator.of(context).pop(const _ScanSheetResult(action: _ScanSheetAction.scanAgain));
-        return;
-      }
-      setState(() => _stepIndex = 0);
-    }
     required double purchasePrice,
     required int points,
-      final mode = _mode;
-      if (mode == null) return;
-
     required String customerName,
-      if (!(_detailsFormKey.currentState?.validate() ?? false)) return;
+    required String employeeName,
   }) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
-      final productName = _productController.text.trim();
           title: const Text('Confirm points update'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-      if (mode == _PointsOperationMode.purchase) {
+              Text('Customer: $customerName'),
               const SizedBox(height: 6),
               Text('Employee: $employeeName'),
               const SizedBox(height: 6),
@@ -627,9 +584,52 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
     return confirmed ?? false;
   }
 
+  Future<bool> _confirmUsePoints({
+    required int pointsToUse,
+    required String customerName,
+    required String employeeName,
+    required String productName,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Confirm points usage'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Customer: $customerName'),
+              const SizedBox(height: 6),
+              Text('Employee: $employeeName'),
+              const SizedBox(height: 6),
+              Text('Product: $productName'),
+              const SizedBox(height: 6),
+              Text('Points to use: $pointsToUse'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Confirm'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return confirmed ?? false;
+  }
+
   Future<void> _submitAction() async {
     if (_submitting) return;
-    if (!(_amountFormKey.currentState?.validate() ?? false)) return;
+    final mode = _mode;
+    if (mode == null) return;
+    if (!(_detailsFormKey.currentState?.validate() ?? false)) return;
 
     final customer = _customer;
     if (customer == null) return;
@@ -639,17 +639,28 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
     double purchaseValue = 0;
     int pointsToAdd = 0;
     int pointsToUse = 0;
+    String productName = '';
 
-    if (_mode == _PointsOperationMode.purchase) {
+    if (mode == _PointsOperationMode.purchase) {
       final value = double.tryParse(raw);
       if (value == null || value <= 0) return;
       purchaseValue = value;
       pointsToAdd = widget.pointsFromPurchase(value);
-      if (pointsToAdd <= 0) return;
+      if (pointsToAdd <= 0) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Purchase does not earn points.')),
+        );
+        return;
+      }
     } else {
       final value = int.tryParse(raw);
       if (value == null || value <= 0) return;
       pointsToUse = value;
+
+      productName = _productController.text.trim();
+      if (productName.isEmpty) return;
+
       if (pointsToUse > customer.points) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -676,12 +687,12 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
     final actor = await AuditLogService.currentActor();
     if (!mounted) return;
 
-    final customerName =
-        '${_customer?.firstName ?? ''} ${_customer?.lastName ?? ''}'
-            .trim()
-            .isEmpty
-        ? (_customer?.fullName ?? 'Unknown customer')
-        : '${_customer?.firstName ?? ''} ${_customer?.lastName ?? ''}'.trim();
+    final computedName = customer.fullName.trim();
+    final customerName = computedName.isNotEmpty
+        ? computedName
+        : (customer.firstName.isNotEmpty || customer.lastName.isNotEmpty)
+        ? '${customer.firstName} ${customer.lastName}'.trim()
+        : 'Unknown customer';
 
     if (mode == _PointsOperationMode.purchase) {
       final confirmed = await _confirmAddPoints(
@@ -706,7 +717,9 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
     setState(() => _submitting = true);
     try {
       final store = CustomerStoreScope.of(context);
-      final delta = mode == _PointsOperationMode.purchase ? pointsToAdd : -pointsToUse;
+      final delta = mode == _PointsOperationMode.purchase
+          ? pointsToAdd
+          : -pointsToUse;
       final ok = await store.addPointsAndPersist(widget.scannedValue, delta);
       if (!ok) {
         if (!mounted) return;
@@ -717,6 +730,7 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
       }
 
       _customer = store.findByUuid(widget.scannedValue);
+
       if (mode == _PointsOperationMode.purchase) {
         await AuditLogService.logRecord(
           type: 'points_added',
@@ -735,16 +749,15 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
           customerId: widget.scannedValue,
           customerName: customerName,
           pointsAdded: -pointsToUse,
-          metadata: <String, Object?>{
-            'productName': productName,
-          },
+          metadata: <String, Object?>{'productName': productName},
         );
       }
-      if (!mounted) return;
 
+      if (!mounted) return;
       final message = mode == _PointsOperationMode.purchase
           ? 'Points has been successfully added.'
           : 'Customer points has been successfully used.';
+
       Navigator.of(context).pop(
         _ScanSheetResult(
           action: _ScanSheetAction.updatedPointsAndGoHome,
@@ -769,7 +782,10 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('Scanned QR', style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      'Scanned QR',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                     const SizedBox(height: 8),
                     SelectableText(widget.scannedValue),
                     const SizedBox(height: 16),
@@ -780,7 +796,9 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
                     const SizedBox(height: 16),
                     OutlinedButton.icon(
                       onPressed: () => Navigator.of(context).pop(
-                        const _ScanSheetResult(action: _ScanSheetAction.scanAgain),
+                        const _ScanSheetResult(
+                          action: _ScanSheetAction.scanAgain,
+                        ),
                       ),
                       icon: const Icon(Icons.qr_code_scanner),
                       label: const Text('Scan again'),
@@ -790,7 +808,9 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
               )
             : Stepper(
                 currentStep: _stepIndex,
-                onStepContinue: _submitting ? null : () async => _continueStep(),
+                onStepContinue: _submitting
+                    ? null
+                    : () async => _continueStep(),
                 onStepCancel: _submitting ? null : _cancelStep,
                 controlsBuilder: (context, details) {
                   final lastStep = _stepIndex == 1;
@@ -800,12 +820,16 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
                       children: [
                         Expanded(
                           child: FilledButton(
-                            onPressed: _submitting ? null : details.onStepContinue,
+                            onPressed: _submitting
+                                ? null
+                                : details.onStepContinue,
                             child: _submitting
                                 ? const SizedBox(
                                     width: 18,
                                     height: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   )
                                 : Text(lastStep ? 'Submit' : 'Continue'),
                           ),
@@ -813,7 +837,9 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: _submitting ? null : details.onStepCancel,
+                            onPressed: _submitting
+                                ? null
+                                : details.onStepCancel,
                             child: Text(_stepIndex == 0 ? 'Cancel' : 'Back'),
                           ),
                         ),
@@ -825,11 +851,15 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
                   Step(
                     title: const Text('Choose Action'),
                     isActive: _stepIndex >= 0,
-                    state: _stepIndex > 0 ? StepState.complete : StepState.indexed,
+                    state: _stepIndex > 0
+                        ? StepState.complete
+                        : StepState.indexed,
                     content: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('${customer.firstName} ${customer.lastName}'.trim()),
+                        Text(
+                          '${customer.firstName} ${customer.lastName}'.trim(),
+                        ),
                         const SizedBox(height: 4),
                         Text('Current points: ${customer.points}'),
                         const SizedBox(height: 12),
@@ -876,7 +906,9 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
                           TextFormField(
                             controller: _amountController,
                             keyboardType: _mode == _PointsOperationMode.purchase
-                                ? const TextInputType.numberWithOptions(decimal: true)
+                                ? const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  )
                                 : TextInputType.number,
                             decoration: InputDecoration(
                               labelText: _mode == _PointsOperationMode.purchase
@@ -891,8 +923,12 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
                             ),
                             validator: (value) {
                               final mode = _mode;
-                              if (mode == null) return 'Please choose an action';
-                              final raw = (value ?? '').trim().replaceAll(',', '');
+                              if (mode == null)
+                                return 'Please choose an action';
+                              final raw = (value ?? '').trim().replaceAll(
+                                ',',
+                                '',
+                              );
                               if (raw.isEmpty) {
                                 return mode == _PointsOperationMode.purchase
                                     ? 'Enter purchase price'
@@ -900,16 +936,21 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
                               }
                               if (mode == _PointsOperationMode.purchase) {
                                 final parsed = double.tryParse(raw);
-                                if (parsed == null) return 'Enter a valid number';
-                                if (parsed <= 0) return 'Must be greater than 0';
+                                if (parsed == null)
+                                  return 'Enter a valid number';
+                                if (parsed <= 0)
+                                  return 'Must be greater than 0';
                               } else {
                                 final parsed = int.tryParse(raw);
-                                if (parsed == null) return 'Enter a whole number';
-                                if (parsed <= 0) return 'Must be greater than 0';
+                                if (parsed == null)
+                                  return 'Enter a whole number';
+                                if (parsed <= 0)
+                                  return 'Must be greater than 0';
                               }
                               return null;
                             },
-                            textInputAction: _mode == _PointsOperationMode.usePoints
+                            textInputAction:
+                                _mode == _PointsOperationMode.usePoints
                                 ? TextInputAction.next
                                 : TextInputAction.done,
                           ),
@@ -924,7 +965,8 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
                                 border: OutlineInputBorder(),
                               ),
                               validator: (value) {
-                                if (_mode != _PointsOperationMode.usePoints) return null;
+                                if (_mode != _PointsOperationMode.usePoints)
+                                  return null;
                                 if (value == null || value.trim().isEmpty) {
                                   return 'Enter product name';
                                 }
@@ -936,7 +978,9 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
                           FilledButton.icon(
                             onPressed: () {
                               Navigator.of(context).pop(
-                                const _ScanSheetResult(action: _ScanSheetAction.openCustomer),
+                                const _ScanSheetResult(
+                                  action: _ScanSheetAction.openCustomer,
+                                ),
                               );
                             },
                             icon: const Icon(Icons.badge_outlined),
