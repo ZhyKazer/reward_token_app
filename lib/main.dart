@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:reward_token_app/admin_registration/admin_registration_page.dart';
 import 'package:reward_token_app/auth/login_page.dart';
 import 'package:reward_token_app/app_shell.dart';
@@ -17,6 +18,8 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await Hive.initFlutter();
+  await Hive.openBox<String>('app_prefs');
   runApp(const MyApp());
 }
 

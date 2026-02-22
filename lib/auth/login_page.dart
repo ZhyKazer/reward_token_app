@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({
@@ -18,12 +19,25 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  static const String _prefsBoxName = 'app_prefs';
+  static const String _lastSignedInEmailKey = 'last_signed_in_email';
+
   final _formKey = GlobalKey<FormState>();
 
   final _identifierController = TextEditingController();
   final _pinController = TextEditingController();
 
+  String? _rememberedEmail;
   bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final remembered = Hive.box<String>(_prefsBoxName).get(_lastSignedInEmailKey);
+    if (remembered != null && remembered.trim().isNotEmpty) {
+      _rememberedEmail = remembered.trim().toLowerCase();
+    }
+  }
 
   @override
   void dispose() {
@@ -63,16 +77,17 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
 
-      final isEmail = identifier.contains('@');
+      final activeIdentifier = _rememberedEmail ?? identifier;
+      final isEmail = activeIdentifier.contains('@');
       String email;
-      String usernameForCallback = identifier;
+      String usernameForCallback = activeIdentifier;
 
       if (isEmail) {
-        email = identifier.toLowerCase();
+        email = activeIdentifier.toLowerCase();
       } else {
         final snapshot = await FirebaseFirestore.instance
             .collection('employees')
-            .where('username', isEqualTo: identifier)
+            .where('username', isEqualTo: activeIdentifier)
             .limit(1)
             .get();
 
@@ -94,7 +109,7 @@ class _LoginPageState extends State<LoginPage> {
           return;
         }
         email = foundEmail.trim().toLowerCase();
-        usernameForCallback = identifier;
+        usernameForCallback = activeIdentifier;
       }
 
       UserCredential cred;
@@ -115,6 +130,8 @@ class _LoginPageState extends State<LoginPage> {
       if (uid == null) {
         throw StateError('Signed in without a user');
       }
+
+      await Hive.box<String>(_prefsBoxName).put(_lastSignedInEmailKey, email);
 
       // If user logged in via email, try to fetch their username.
       if (isEmail) {
@@ -139,6 +156,8 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final usingRememberedEmail = _rememberedEmail != null && _rememberedEmail!.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Login'),
@@ -149,19 +168,44 @@ class _LoginPageState extends State<LoginPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              TextFormField(
-                controller: _identifierController,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'Username or Email',
-                  border: OutlineInputBorder(),
+              if (usingRememberedEmail) ...[
+                InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                  ),
+                  child: Text(_rememberedEmail!),
                 ),
-                validator: _requiredValidator,
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: _submitting
+                        ? null
+                        : () async {
+                            await Hive.box<String>(_prefsBoxName).delete(_lastSignedInEmailKey);
+                            if (!mounted) return;
+                            setState(() => _rememberedEmail = null);
+                          },
+                    child: const Text('Use a different account'),
+                  ),
+                ),
+                const SizedBox(height: 4),
+              ] else ...[
+                TextFormField(
+                  controller: _identifierController,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Username or Email',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: _requiredValidator,
+                ),
+                const SizedBox(height: 12),
+              ],
               TextFormField(
                 controller: _pinController,
-                textInputAction: TextInputAction.done,
+                textInputAction: usingRememberedEmail ? TextInputAction.done : TextInputAction.next,
                 keyboardType: TextInputType.number,
                 obscureText: true,
                 decoration: const InputDecoration(
