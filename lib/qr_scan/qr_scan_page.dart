@@ -712,6 +712,8 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
       if (!confirmed) return;
     }
 
+    if (!mounted) return;
+
     _lastAddPointsAt = DateTime.now();
 
     setState(() => _submitting = true);
@@ -923,8 +925,9 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
                             ),
                             validator: (value) {
                               final mode = _mode;
-                              if (mode == null)
+                              if (mode == null) {
                                 return 'Please choose an action';
+                              }
                               final raw = (value ?? '').trim().replaceAll(
                                 ',',
                                 '',
@@ -936,16 +939,20 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
                               }
                               if (mode == _PointsOperationMode.purchase) {
                                 final parsed = double.tryParse(raw);
-                                if (parsed == null)
+                                if (parsed == null) {
                                   return 'Enter a valid number';
-                                if (parsed <= 0)
+                                }
+                                if (parsed <= 0) {
                                   return 'Must be greater than 0';
+                                }
                               } else {
                                 final parsed = int.tryParse(raw);
-                                if (parsed == null)
+                                if (parsed == null) {
                                   return 'Enter a whole number';
-                                if (parsed <= 0)
+                                }
+                                if (parsed <= 0) {
                                   return 'Must be greater than 0';
+                                }
                               }
                               return null;
                             },
@@ -965,8 +972,9 @@ class _ScanResultSheetState extends State<_ScanResultSheet> {
                                 border: OutlineInputBorder(),
                               ),
                               validator: (value) {
-                                if (_mode != _PointsOperationMode.usePoints)
+                                if (_mode != _PointsOperationMode.usePoints) {
                                   return null;
+                                }
                                 if (value == null || value.trim().isEmpty) {
                                   return 'Enter product name';
                                 }

@@ -5,7 +5,7 @@ import 'package:reward_token_app/admin_registration/admin_registration_page.dart
 import 'package:reward_token_app/customer_registration/customer_registration_page.dart';
 import 'package:reward_token_app/employee_registration/employee_registration_page.dart';
 import 'package:reward_token_app/home/home_page.dart';
-import 'package:reward_token_app/qr_scan/qr_scan_page.dart';
+import 'package:reward_token_app/qr_scan/points_qr_scan_page.dart';
 import 'package:reward_token_app/records/activity_records_page.dart';
 
 class AppShell extends StatefulWidget {
@@ -17,22 +17,27 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
+  bool _scanFabExpanded = false;
 
   bool _isAdmin = false;
   bool _loadingRole = true;
-
-  void _handleQrOperationSuccess(String message) {
-    if (!mounted) return;
-    setState(() => _index = 0);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
 
   @override
   void initState() {
     super.initState();
     _loadRole();
+  }
+
+  Future<void> _openQrScan(PointsOperation operation) async {
+    setState(() {
+      _scanFabExpanded = false;
+    });
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PointsQrScanPage(operation: operation),
+      ),
+    );
   }
 
   Future<void> _loadRole() async {
@@ -71,7 +76,6 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final titles = <String>[
       'Home',
-      'QR Scan',
       'Customer Registration',
       'Records',
       if (_isAdmin) 'Employee Registration',
@@ -80,10 +84,6 @@ class _AppShellState extends State<AppShell> {
 
     final pages = <Widget>[
       const HomePage(),
-      QrScanBody(
-        active: _index == 1,
-        onOperationSuccess: _handleQrOperationSuccess,
-      ),
       const CustomerRegistrationForm(),
       const ActivityRecordsPage(),
       if (_isAdmin) const EmployeeRegistrationForm(),
@@ -92,10 +92,6 @@ class _AppShellState extends State<AppShell> {
 
     final items = <BottomNavigationBarItem>[
       const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.qr_code_scanner),
-        label: 'QR Scan',
-      ),
       const BottomNavigationBarItem(
         icon: Icon(Icons.app_registration),
         label: 'Customer Registration',
@@ -125,9 +121,50 @@ class _AppShellState extends State<AppShell> {
       body: _loadingRole
           ? const Center(child: CircularProgressIndicator())
           : IndexedStack(index: _index, children: pages),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: _loadingRole
+          ? null
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (_scanFabExpanded) ...[
+                  FloatingActionButton.extended(
+                    heroTag: 'addPointsFab',
+                    onPressed: () => _openQrScan(PointsOperation.add),
+                    icon: const Icon(Icons.add_circle_outline),
+                    label: const Text('Add Points'),
+                  ),
+                  const SizedBox(height: 12),
+                  FloatingActionButton.extended(
+                    heroTag: 'usePointsFab',
+                    onPressed: () => _openQrScan(PointsOperation.use),
+                    icon: const Icon(Icons.remove_circle_outline),
+                    label: const Text('Use Points'),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                FloatingActionButton(
+                  heroTag: 'qrMainFab',
+                  onPressed: () {
+                    setState(() {
+                      _scanFabExpanded = !_scanFabExpanded;
+                    });
+                  },
+                  child: Icon(
+                    _scanFabExpanded ? Icons.close : Icons.qr_code_scanner,
+                  ),
+                ),
+              ],
+            ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
-        onTap: (value) => setState(() => _index = value),
+        onTap: (value) {
+          setState(() {
+            _scanFabExpanded = false;
+            _index = value;
+          });
+        },
         items: items,
       ),
     );

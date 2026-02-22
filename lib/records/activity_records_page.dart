@@ -3,7 +3,13 @@ import 'package:flutter/material.dart';
 
 enum _RecordFilter { all, customerOnly, employeeAdminOnly }
 
-enum _SortMetric { purchase, points }
+enum _SortMetric {
+  allTransactionType,
+  pointsAdded,
+  pointsUsed,
+  employeeCreation,
+  adminCreation,
+}
 
 enum _SortOrder { descending, ascending }
 
@@ -18,7 +24,7 @@ class _ActivityRecordsPageState extends State<ActivityRecordsPage> {
   final TextEditingController _searchController = TextEditingController();
 
   _RecordFilter _filter = _RecordFilter.all;
-  _SortMetric _sortMetric = _SortMetric.purchase;
+  _SortMetric _sortMetric = _SortMetric.allTransactionType;
   _SortOrder _sortOrder = _SortOrder.descending;
 
   @override
@@ -33,18 +39,36 @@ class _ActivityRecordsPageState extends State<ActivityRecordsPage> {
         type == 'points_used';
   }
 
-  bool _isEmployeeAdminRecord(String type) {
-    return type == 'employee_created' || type == 'admin_created';
+  bool _isEmployeeAdminRecord(Map<String, dynamic> data) {
+    final actor = data['actor'] as Map<String, dynamic>?;
+    final actorRole = ((actor?['role'] as String?) ?? '').toLowerCase();
+    return actorRole == 'employee' || actorRole == 'admin';
   }
 
-  bool _recordPassesTypeFilter(String type) {
+  bool _recordPassesTypeFilter(Map<String, dynamic> data) {
+    final type = (data['type'] as String?) ?? '';
     switch (_filter) {
       case _RecordFilter.all:
         return true;
       case _RecordFilter.customerOnly:
         return _isCustomerRecord(type);
       case _RecordFilter.employeeAdminOnly:
-        return _isEmployeeAdminRecord(type);
+        return _isEmployeeAdminRecord(data);
+    }
+  }
+
+  bool _recordPassesTransactionTypeFilter(String type) {
+    switch (_sortMetric) {
+      case _SortMetric.allTransactionType:
+        return true;
+      case _SortMetric.pointsAdded:
+        return type == 'points_added';
+      case _SortMetric.pointsUsed:
+        return type == 'points_used';
+      case _SortMetric.employeeCreation:
+        return type == 'employee_created';
+      case _SortMetric.adminCreation:
+        return type == 'admin_created';
     }
   }
 
@@ -74,29 +98,14 @@ class _ActivityRecordsPageState extends State<ActivityRecordsPage> {
   }
 
   int _sortRecords(Map<String, dynamic> a, Map<String, dynamic> b) {
-    int compare;
-    switch (_sortMetric) {
-      case _SortMetric.purchase:
-        compare = _asDouble(
-          a['purchasePrice'],
-        ).compareTo(_asDouble(b['purchasePrice']));
-        break;
-      case _SortMetric.points:
-        compare = _asInt(a['pointsAdded']).compareTo(_asInt(b['pointsAdded']));
-        break;
-    }
-
-    if (_sortOrder == _SortOrder.descending) {
-      compare = -compare;
-    }
-
-    if (compare != 0) return compare;
-
     final aCreatedAt =
         (a['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
     final bCreatedAt =
         (b['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-    return bCreatedAt.compareTo(aCreatedAt);
+    if (_sortOrder == _SortOrder.descending) {
+      return bCreatedAt.compareTo(aCreatedAt);
+    }
+    return aCreatedAt.compareTo(bCreatedAt);
   }
 
   String _formatCreatedAt(dynamic value) {
@@ -108,6 +117,60 @@ class _ActivityRecordsPageState extends State<ActivityRecordsPage> {
     final hour = dt.hour.toString().padLeft(2, '0');
     final minute = dt.minute.toString().padLeft(2, '0');
     return '$year-$month-$day $hour:$minute';
+  }
+
+  String _formatTimeOnly(dynamic value) {
+    if (value is! Timestamp) return 'pending time';
+    final dt = value.toDate().toLocal();
+    final hour24 = dt.hour;
+    final minute = dt.minute.toString().padLeft(2, '0');
+    final isPm = hour24 >= 12;
+    final hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
+    final period = isPm ? 'PM' : 'AM';
+    return '$hour12:$minute $period';
+  }
+
+  Widget? _buildTypeBadge(Map<String, dynamic> data) {
+    final type = (data['type'] as String?) ?? '';
+    final pointsAdded = _asInt(data['pointsAdded']);
+
+    if (type == 'points_added') {
+      final label = pointsAdded > 0 ? '+$pointsAdded' : '+Points';
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFA31A),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+    }
+
+    if (type == 'points_used') {
+      final label = pointsAdded > 0 ? '-$pointsAdded' : '-Points';
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFCF6679),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+    }
+
+    return null;
   }
 
   @override
@@ -175,12 +238,24 @@ class _ActivityRecordsPageState extends State<ActivityRecordsPage> {
                     ),
                     items: const [
                       DropdownMenuItem(
-                        value: _SortMetric.purchase,
-                        child: Text('Purchase'),
+                        value: _SortMetric.allTransactionType,
+                        child: Text('All'),
                       ),
                       DropdownMenuItem(
-                        value: _SortMetric.points,
-                        child: Text('Points added'),
+                        value: _SortMetric.pointsAdded,
+                        child: Text('Points Added'),
+                      ),
+                      DropdownMenuItem(
+                        value: _SortMetric.pointsUsed,
+                        child: Text('Points Used'),
+                      ),
+                      DropdownMenuItem(
+                        value: _SortMetric.employeeCreation,
+                        child: Text('Employee Creation'),
+                      ),
+                      DropdownMenuItem(
+                        value: _SortMetric.adminCreation,
+                        child: Text('Admin Creation'),
                       ),
                     ],
                     onChanged: (value) {
@@ -240,7 +315,10 @@ class _ActivityRecordsPageState extends State<ActivityRecordsPage> {
                 final records =
                     snapshot.data?.docs.map((doc) => doc.data()).where((data) {
                       final type = (data['type'] as String?) ?? '';
-                      if (!_recordPassesTypeFilter(type)) return false;
+                      if (!_recordPassesTypeFilter(data)) return false;
+                      if (!_recordPassesTransactionTypeFilter(type)) {
+                        return false;
+                      }
                       return _recordPassesSearch(data, query);
                     }).toList() ??
                     <Map<String, dynamic>>[];
@@ -266,38 +344,87 @@ class _ActivityRecordsPageState extends State<ActivityRecordsPage> {
                     final data = records[index];
                     final actor = data['actor'] as Map<String, dynamic>?;
                     final actorName = (actor?['name'] as String?) ?? 'Unknown';
+                    final title = (data['title'] as String?) ?? 'Record';
                     final customerName = (data['customerName'] as String?)
                         ?.trim();
                     final targetName = (data['targetName'] as String?)?.trim();
-                    final pointsAdded = _asInt(data['pointsAdded']);
-                    final purchasePrice = _asDouble(data['purchasePrice']);
-                    final title = (data['title'] as String?) ?? 'Record';
+                    final destinationName =
+                        (targetName != null && targetName.isNotEmpty)
+                        ? targetName
+                        : (customerName != null && customerName.isNotEmpty)
+                        ? customerName
+                        : 'Unknown';
+                    final badge = _buildTypeBadge(data);
 
-                    final subtitleParts = <String>['By: $actorName'];
-
-                    if (customerName != null && customerName.isNotEmpty) {
-                      subtitleParts.add('Customer: $customerName');
-                    }
-                    if (targetName != null && targetName.isNotEmpty) {
-                      subtitleParts.add('Name: $targetName');
-                    }
-                    if (purchasePrice > 0) {
-                      subtitleParts.add(
-                        'Purchase: ${purchasePrice.toStringAsFixed(2)}',
-                      );
-                    }
-                    if (pointsAdded > 0) {
-                      subtitleParts.add('Points: $pointsAdded');
-                    }
-
-                    return Card(
-                      child: ListTile(
-                        title: Text(title),
-                        subtitle: Text(
-                          '${subtitleParts.join(' • ')}\n${_formatCreatedAt(data['createdAt'])}',
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 24,
+                          child: Column(
+                            children: [
+                              Container(
+                                margin: const EdgeInsets.only(top: 2),
+                                width: 2,
+                                height: 8,
+                                color: Theme.of(context).dividerColor,
+                              ),
+                              Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 2),
+                                width: 2,
+                                height: 40, // Fixed height for the line
+                                color: Theme.of(context).dividerColor,
+                              ),
+                            ],
+                          ),
                         ),
-                        isThreeLine: true,
-                      ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        title,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium,
+                                      ),
+                                    ),
+                                    if (badge != null) ...[
+                                      const SizedBox(width: 8),
+                                      badge,
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text('$actorName → $destinationName'),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _formatTimeOnly(data['createdAt']),
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     );
                   },
                 );
