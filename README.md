@@ -51,3 +51,11 @@ Reward Token is a Flutter + Firebase app for registering customers, issuing QR c
 - Cloud Firestore
 - `mobile_scanner`, `image_picker`, `qr_flutter`, `printing`, `pdf`
  - `hive_flutter` (local key-value persistence for remembering last-signed-in email)
+
+--
+
+Copyright (c) 2026 SkyeLucas
+
+All rights reserved.
+
+This source code and associated files may not be copied, modified, distributed, or used in any form without explicit written permission from the author.
